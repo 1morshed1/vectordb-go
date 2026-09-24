@@ -14,12 +14,12 @@ func approx(a, b float32) bool {
 
 func TestParseMetric(t *testing.T) {
 	cases := map[string]Metric{
-		"":            Cosine,
-		"cosine":      Cosine,
-		"dot":         DotProduct,
+		"":              Cosine,
+		"cosine":        Cosine,
+		"dot":           DotProduct,
 		"inner_product": DotProduct,
-		"l2":          Euclidean,
-		"euclidean":   Euclidean,
+		"l2":            Euclidean,
+		"euclidean":     Euclidean,
 	}
 	for in, want := range cases {
 		got, err := ParseMetric(in)
