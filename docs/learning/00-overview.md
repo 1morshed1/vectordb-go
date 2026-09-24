@@ -39,6 +39,7 @@ git commit, so you can `git log` and follow the project as it grew.
 | `06-persistence-and-wal.md` | `internal/storage` | Crash recovery, why a write-ahead log, snapshot format. |
 | `07-grpc-api.md` | `api/`, `cmd/vectordb-server` | The wire protocol and server wiring. |
 | `08-metrics-and-benchmarks.md` | `internal/metrics`, `cmd/vectordb-bench` | recall@k, QPS, and how we measure them. |
+| `09-decisions-and-scope.md` | — | Capstone: every major decision in one place, plus the spec→code map. |
 
 ## The design principles we hold throughout
 
