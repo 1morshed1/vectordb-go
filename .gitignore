@@ -1,0 +1,7 @@
+# Build output
+/bin/
+# Runtime data (WAL + snapshots)
+/data/
+# Test/scratch artifacts
+*.out
+*.test
