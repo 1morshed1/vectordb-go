@@ -228,7 +228,7 @@ func (h *Index) Insert(id uint64, vector []float32) error {
 		startLevel = h.maxLevel
 	}
 	for lvl := startLevel; lvl >= 0; lvl-- {
-		candidates := h.searchLayer(v, entryPoints, h.cfg.EfConstruction, lvl)
+		candidates := h.searchLayer(v, entryPoints, h.cfg.EfConstruction, lvl, nil)
 
 		mMax := h.cfg.M
 		if lvl == 0 {
@@ -293,12 +293,21 @@ func (h *Index) greedyDescend(query []float32, curr uint32, currDist float32, le
 // remaining candidate is farther than the worst result we already have — at
 // that point nothing left to explore can improve the result set.
 //
+// admit decides whether a node is eligible to enter the *result* set. It does
+// NOT affect traversal: non-admitted nodes are still explored as bridges toward
+// admitted ones (this is what makes filtered search over the graph work). Pass
+// nil to admit every live node (the ordinary unfiltered case).
+//
 // Returns up to ef candidates (unsorted; caller sorts or heuristically selects).
-func (h *Index) searchLayer(query []float32, entryPoints []candidate, ef, level int) []candidate {
+func (h *Index) searchLayer(query []float32, entryPoints []candidate, ef, level int, admit func(uint32) bool) []candidate {
 	// visited guards against re-expanding a node. A map is simple and fine; a
 	// production system would use a reusable visited-bitset pool to avoid
 	// allocation, which guide 02 discusses.
 	visited := make(map[uint32]struct{}, ef*2)
+
+	admits := func(node uint32) bool {
+		return !h.deleted[node] && (admit == nil || admit(node))
+	}
 
 	cands := &minHeap{}
 	results := &maxHeap{}
@@ -311,7 +320,7 @@ func (h *Index) searchLayer(query []float32, entryPoints []candidate, ef, level 
 		}
 		visited[ep.node] = struct{}{}
 		heap.Push(cands, ep)
-		if !h.deleted[ep.node] {
+		if admits(ep.node) {
 			heap.Push(results, ep)
 		}
 	}
@@ -320,7 +329,9 @@ func (h *Index) searchLayer(query []float32, entryPoints []candidate, ef, level 
 		nearest := heap.Pop(cands).(candidate)
 		// Early termination: if the closest thing left to explore is farther
 		// than our current worst kept result (and we already have ef of them),
-		// we can never improve — stop.
+		// we can never improve — stop. When filtering, results fills more slowly
+		// (fewer nodes are admitted), so we naturally explore more of the graph
+		// before this triggers.
 		if results.Len() >= ef && nearest.dist > results.peek().dist {
 			break
 		}
@@ -332,10 +343,11 @@ func (h *Index) searchLayer(query []float32, entryPoints []candidate, ef, level 
 			visited[nb] = struct{}{}
 			d := h.distTo(query, nb)
 
-			// Add nb to results if there is room, or if it beats our worst.
+			// Explore nb (push to frontier) if it could still be useful, i.e. we
+			// don't yet have ef results or nb beats our current worst result.
 			if results.Len() < ef || d < results.peek().dist {
 				heap.Push(cands, candidate{node: nb, dist: d})
-				if !h.deleted[nb] {
+				if admits(nb) {
 					heap.Push(results, candidate{node: nb, dist: d})
 					if results.Len() > ef {
 						heap.Pop(results) // evict the farthest
@@ -442,7 +454,7 @@ func (h *Index) Search(query []float32, topK, efSearch int) ([]Result, error) {
 	}
 
 	// Phase 2: wide beam search at layer 0.
-	found := h.searchLayer(query, []candidate{{node: curr, dist: currDist}}, efSearch, 0)
+	found := h.searchLayer(query, []candidate{{node: curr, dist: currDist}}, efSearch, 0, nil)
 
 	sort.Slice(found, func(i, j int) bool { return found[i].dist < found[j].dist })
 	if len(found) > topK {
@@ -453,6 +465,80 @@ func (h *Index) Search(query []float32, topK, efSearch int) ([]Result, error) {
 		out[i] = Result{ID: h.ids[c.node], Distance: c.dist}
 	}
 	return out, nil
+}
+
+// SearchFiltered runs the same graph search as Search, but only ids for which
+// allow(id) returns true are eligible to appear in the results. Non-matching
+// nodes are still traversed as bridges, so matches on the far side of a filtered
+// region are still reachable. This is the "filtered HNSW" approach Qdrant uses
+// for medium-selectivity filters (see docs/learning/04).
+//
+// Because the result set fills more slowly when the filter is selective, the
+// search explores more of the graph; callers should raise efSearch for filters,
+// and fall back to an exact pre-filter scan when the filter is very selective.
+func (h *Index) SearchFiltered(query []float32, topK, efSearch int, allow func(id uint64) bool) ([]Result, error) {
+	if len(query) != h.cfg.Dim {
+		return nil, ErrDimMismatch
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if h.maxLevel == -1 || h.count == 0 {
+		return nil, nil
+	}
+	if efSearch <= 0 {
+		efSearch = h.cfg.EfSearch
+	}
+	if efSearch < topK {
+		efSearch = topK
+	}
+
+	// Translate the caller's id predicate into an internal-index predicate once.
+	admit := func(idx uint32) bool { return allow(h.ids[idx]) }
+
+	curr := h.entryPoint
+	currDist := h.distTo(query, curr)
+	for lvl := h.maxLevel; lvl > 0; lvl-- {
+		curr, currDist = h.greedyDescend(query, curr, currDist, lvl)
+	}
+	found := h.searchLayer(query, []candidate{{node: curr, dist: currDist}}, efSearch, 0, admit)
+
+	sort.Slice(found, func(i, j int) bool { return found[i].dist < found[j].dist })
+	if len(found) > topK {
+		found = found[:topK]
+	}
+	out := make([]Result, len(found))
+	for i, c := range found {
+		out[i] = Result{ID: h.ids[c.node], Distance: c.dist}
+	}
+	return out, nil
+}
+
+// BruteForceSubset computes the exact topK nearest neighbors among only the
+// given ids. This is the "pre-filter" path: when a metadata filter is very
+// selective (matches few vectors), it is faster and *exact* to score just those
+// vectors directly than to navigate the graph avoiding everything else. Unknown
+// or deleted ids are skipped.
+func (h *Index) BruteForceSubset(query []float32, ids []uint64, topK int) ([]Result, error) {
+	if len(query) != h.cfg.Dim {
+		return nil, ErrDimMismatch
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	all := make([]Result, 0, len(ids))
+	for _, id := range ids {
+		idx, ok := h.idToIdx[id]
+		if !ok || h.deleted[idx] {
+			continue
+		}
+		all = append(all, Result{ID: id, Distance: h.distTo(query, idx)})
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].Distance < all[j].Distance })
+	if len(all) > topK {
+		all = all[:topK]
+	}
+	return all, nil
 }
 
 // Delete soft-deletes a vector by id. The node stays in the graph (removing it
