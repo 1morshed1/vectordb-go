@@ -591,3 +591,17 @@ func (h *Index) BruteForce(query []float32, topK int) ([]Result, error) {
 
 // Config returns a copy of the index configuration.
 func (h *Index) Config() Config { return h.cfg }
+
+// ForEach calls fn for every live (non-deleted) vector, in internal-index order.
+// The vector passed is the index's own stored copy — treat it as read-only; do
+// not retain or mutate it. Used by the storage layer to snapshot the index.
+func (h *Index) ForEach(fn func(id uint64, vector []float32)) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for idx := range h.vectors {
+		if h.deleted[idx] {
+			continue
+		}
+		fn(h.ids[idx], h.vectors[idx])
+	}
+}

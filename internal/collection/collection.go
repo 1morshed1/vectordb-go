@@ -194,6 +194,28 @@ func (c *Collection) Search(query []float32, topK, efSearch int) ([]SearchResult
 	return c.attach(hits), nil
 }
 
+// Item is a full stored entry: id, its (possibly normalized) vector, and its
+// metadata. Returned by Items for snapshotting.
+type Item struct {
+	ID       uint64
+	Vector   []float32
+	Metadata Metadata
+}
+
+// Items returns every live entry in the collection. The vectors are copies, so
+// the caller may keep them. Used by the storage layer to snapshot state.
+func (c *Collection) Items() []Item {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	items := make([]Item, 0, len(c.meta))
+	c.index.ForEach(func(id uint64, vector []float32) {
+		v := make([]float32, len(vector))
+		copy(v, vector)
+		items = append(items, Item{ID: id, Vector: v, Metadata: c.meta[id]})
+	})
+	return items
+}
+
 // attach converts index results into collection results by looking up metadata.
 // Caller must hold at least the read lock.
 func (c *Collection) attach(hits []hnsw.Result) []SearchResult {
