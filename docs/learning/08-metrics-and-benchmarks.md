@@ -10,7 +10,7 @@ under controlled load).
 ## Part A — Live metrics (`internal/metrics`)
 
 We expose Prometheus metrics, the de-facto standard for infrastructure. Four
-signals, straight from the plan:
+signals, straight from the spec:
 
 | Metric | Type | Why |
 |--------|------|-----|

@@ -1,5 +1,5 @@
 // Command vectordb-bench measures the four numbers that decide whether an ANN
-// index is any good, exactly the ones listed in plan.md:
+// index is any good, exactly the ones listed in the original spec:
 //
 //   - Recall@k at various ef_search — how accuracy trades off against speed.
 //   - Queries per second (QPS)      — throughput at a given recall.

@@ -1,5 +1,8 @@
 # vectordb-go
 
+[![CI](https://github.com/1morshed1/vectordb-go/actions/workflows/ci.yml/badge.svg)](https://github.com/1morshed1/vectordb-go/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A **vector search database** built from scratch in Go — a simplified Qdrant /
 Weaviate. It stores high-dimensional embeddings, builds an **HNSW** index for
 fast approximate nearest-neighbor search, supports **metadata filtering**, adds

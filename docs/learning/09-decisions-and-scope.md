@@ -1,7 +1,7 @@
 # Learning Guide 09 — Decisions Log & Scope
 
 **No package** — this is the capstone. It collects, in one place, the major
-decisions made across the project and maps the original `plan.md` spec to what
+decisions made across the project and maps the original spec to what
 was actually built (and what was deliberately left out, and why). Read it after
 the others as a review, or first if you want the executive summary.
 
@@ -106,7 +106,7 @@ measure how approximate it is. *(Guides 02, 04, 08)*
 
 ---
 
-## `plan.md` spec → what was built
+## Original spec → what was built
 
 | Spec item | Status | Notes |
 |-----------|--------|-------|

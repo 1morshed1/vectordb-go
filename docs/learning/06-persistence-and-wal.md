@@ -127,7 +127,7 @@ recovery we re-insert the vectors, which rebuilds the index from scratch.
 Production engines persist the graph itself — typically the adjacency lists in a
 **memory-mapped file** (`mmap`), so the graph is "loaded" by mapping the file and
 paging in on demand, with no rebuild. That's the natural next step and the reason
-the architecture diagram in `plan.md` shows `vectors.dat` and `hnsw.dat` as
+the architecture diagram in the original spec shows `vectors.dat` and `hnsw.dat` as
 mmap'd files. We chose rebuild-on-load to keep this guide about *durability*
 rather than *serialization format*, but the WAL/snapshot machinery here is
 exactly what you'd keep.
