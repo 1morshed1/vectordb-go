@@ -9,8 +9,7 @@ fast approximate nearest-neighbor search, supports **metadata filtering**, adds
 **int8 quantization** and **crash-safe persistence**, and exposes everything over
 a **gRPC** API with **Prometheus** metrics.
 
-It is also a **teaching repository.** Every package has a companion learning
-document in [`docs/learning/`](docs/learning/) that explains *why* the code is
+Every package has a companion design document in [`docs/learning/`](docs/learning/) that explains *why* the code is
 the way it is and which trade-offs were chosen. If you've used pgvector, FAISS,
 or ChromaDB but never looked inside one, start with
 [`docs/learning/00-overview.md`](docs/learning/00-overview.md).
